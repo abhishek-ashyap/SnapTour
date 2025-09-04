@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    /* Set a base dark color */
+    @apply bg-[#0C0A09];
+  }
+}
+
+/* This is a helper class to contain the aurora effect */
+.aurora-container {
+  @apply relative isolate overflow-hidden;
+}
+
+/* This is the core of the effect.
+  - It creates a pseudo-element that sits behind your content.
+  - It uses a large, blurred radial gradient to create the soft blob of color.
+  - The animation slowly moves this blob around.
+*/
+.aurora-container::before {
+  content: '';
+  @apply absolute -z-10 inset-0 transform-gpu;
+  
+  background-image: radial-gradient(
+    ellipse 50% 50% at 20% 40%,
+    rgba(99, 102, 241, 0.3), /* Indigo */
+    transparent
+  ),
+  radial-gradient(
+    ellipse 50% 50% at 80% 50%,
+    rgba(219, 39, 119, 0.2), /* Pink */
+    transparent
+  );
+  
+  filter: blur(80px);
+  animation: aurora-pulse 10s linear infinite;
+}
+
+@keyframes aurora-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
