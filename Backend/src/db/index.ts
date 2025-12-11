@@ -5,9 +5,9 @@ dotenv.config();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  // Recommended for development environments, but for production,
-  // you'll want a more secure SSL configuration.
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : false
+  ssl: {
+    rejectUnauthorized: false // REQUIRED for Render
+  }
 });
 
 export default {
