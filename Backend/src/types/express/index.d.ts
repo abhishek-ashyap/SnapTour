@@ -1,11 +1,14 @@
-// This file extends the existing Express Request interface
-// to include our custom 'user' property.
+import "express";
 
-declare namespace Express {
-  export interface Request {
-    user?: {
-      id: string;
-      role: 'creator' | 'viewer';
-    };
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        id: string;
+        role: "creator" | "viewer";
+      };
+    }
   }
 }
+
+export {};
