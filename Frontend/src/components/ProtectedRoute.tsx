@@ -1,11 +1,23 @@
 import { Navigate, Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { supabase } from '../services/supabase';
 
 const ProtectedRoute = () => {
-  const token = localStorage.getItem('token');
+  const [loading, setLoading] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
 
-  // If a token exists, render the child component (e.g., DashboardPage)
-  // Otherwise, redirect to the login page
-  return token ? <Outlet /> : <Navigate to="/login" replace />;
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setAuthenticated(!!data.session);
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) {
+    return <div className="p-10 text-center text-slate-400">Checking session…</div>;
+  }
+
+  return authenticated ? <Outlet /> : <Navigate to="/login" replace />;
 };
 
 export default ProtectedRoute;

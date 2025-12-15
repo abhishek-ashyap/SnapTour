@@ -1,60 +1,70 @@
-import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import api from '../services/api';
-import { motion } from 'framer-motion';
+import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { supabase } from "../services/supabase";
 
 const ForgotPasswordPage = () => {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setMessage('');
-    try {
-      const response = await api.post('/auth/forgot-password', { email });
-      setMessage(response.data.msg);
-    } catch (err) {
-      // Still show a positive message for security
-      setMessage('If an account with that email exists, a password reset link has been sent.');
-    } finally {
-      setLoading(false);
+    setError("");
+    setMessage("");
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    setLoading(false);
+
+    if (error) {
+      setError(error.message);
+      return;
     }
+
+    // Supabase ALWAYS returns success (anti-enumeration)
+    setMessage(
+      "If an account with that email exists, a password reset link has been sent."
+    );
   };
 
   return (
-    <main className="flex items-center justify-center min-h-screen w-full px-4 aurora-container">
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-sm rounded-2xl border border-white/20 bg-black/10 p-6 backdrop-blur-xl shadow-2xl"
-      >
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold tracking-tight text-white">Forgot Password</h2>
-          <p className="mt-2 text-sm text-slate-300">Enter your email to receive a reset link.</p>
-        </div>
+    <main className="flex items-center justify-center min-h-screen aurora-container px-4">
+      <motion.div className="w-full max-w-sm rounded-2xl border border-white/20 bg-black/10 p-6 backdrop-blur-xl shadow-2xl">
+        <h2 className="text-3xl font-bold text-white text-center mb-6">
+          Forgot Password
+        </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {!message ? (
-            <>
-              <div className="relative">
-                <input id="email" name="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-white placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="Email" />
-              </div>
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" disabled={loading} className="w-full rounded-md bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg hover:shadow-blue-500/30">
-                {loading ? 'Sending...' : 'Send Reset Link'}
-              </motion.button>
-            </>
-          ) : (
-            // This className fixes the issue
-            <p className="text-center text-green-300">{message}</p>
-          )}
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            className="w-full rounded-md bg-slate-800/50 border border-slate-700 px-3 py-2 text-white"
+          />
 
-          <div className="pt-4 text-center text-sm text-slate-400">
-            <Link to="/login" className="font-semibold text-blue-400 hover:underline">
-              Back to Sign In
+          {error && <p className="text-pink-400 text-sm text-center">{error}</p>}
+          {message && <p className="text-green-400 text-sm text-center">{message}</p>}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-blue-500 to-purple-600 py-2.5 rounded-md text-white font-semibold"
+          >
+            {loading ? "Sending..." : "Send Reset Link"}
+          </button>
+
+          <p className="text-sm text-center text-slate-400">
+            <Link to="/login" className="text-blue-400 font-semibold">
+              Back to login
             </Link>
-          </div>
+          </p>
         </form>
       </motion.div>
     </main>

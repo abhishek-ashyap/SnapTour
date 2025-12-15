@@ -1,10 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import api from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const cardVariants = { /* ... same as before */ };
-const itemVariants = { /* ... same as before */ };
+import api from '../services/api';
+import { supabase } from '../services/supabase';
 
 const LoginPage = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -20,13 +18,29 @@ const LoginPage = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+
     try {
-      const response = await api.post('/auth/login', formData);
-      localStorage.setItem('token', response.data.token);
+      // 1️⃣ Login via Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (error) throw error;
+      if (!data.session) {
+        throw new Error('No session returned from Supabase');
+      }
+
+      // 2️⃣ Store access token
+      localStorage.setItem('token', data.session.access_token);
+
+      // 3️⃣ Ensure profile exists
+      await api.post('/auth/sync-profile');
+
+      // 4️⃣ Redirect
       navigate('/dashboard');
     } catch (err: any) {
-      const errorMessage = err.response?.data?.errors?.[0]?.msg || 'Login failed. Please check your credentials.';
-      setError(errorMessage);
+      setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -35,37 +49,62 @@ const LoginPage = () => {
   return (
     <main className="flex items-center justify-center min-h-screen w-full px-4 aurora-container">
       <motion.div
-        variants={cardVariants}
-        initial="hidden"
-        animate="visible"
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-sm rounded-2xl border border-white/20 bg-black/10 p-6 backdrop-blur-xl shadow-2xl"
       >
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold tracking-tight text-white">Sign In</h2>
-          <p className="mt-2 text-sm text-slate-300">Welcome back to your account.</p>
+          <p className="mt-2 text-sm text-slate-300">Welcome back.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="relative">
-            <input id="email" name="email" type="email" required value={formData.email} onChange={handleChange} className="w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-white placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="Email" />
-          </div>
+          <input
+            name="email"
+            type="email"
+            required
+            value={formData.email}
+            onChange={handleChange}
+            className="w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-white"
+            placeholder="Email"
+          />
 
-          <div className="relative">
-            <input id="password" name="password" type="password" required value={formData.password} onChange={handleChange} className="w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-white placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="Password" />
-          </div>
+          <input
+            name="password"
+            type="password"
+            required
+            value={formData.password}
+            onChange={handleChange}
+            className="w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-white"
+            placeholder="Password"
+          />
 
-          {/* Add the "Forgot Password?" link here */}
           <div className="text-right text-sm">
             <Link to="/forgot-password" className="font-semibold text-blue-400 hover:underline">
               Forgot Password?
             </Link>
           </div>
-          
+
           <AnimatePresence>
-            {error && <motion.p initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="text-sm text-pink-400 text-center">{error}</motion.p>}
+            {error && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-sm text-pink-400 text-center"
+              >
+                {error}
+              </motion.p>
+            )}
           </AnimatePresence>
-          
-          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" disabled={loading} className="w-full rounded-md bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg hover:shadow-blue-500/30 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-60">
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-md bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white"
+          >
             {loading ? 'Signing in...' : 'Sign In'}
           </motion.button>
 

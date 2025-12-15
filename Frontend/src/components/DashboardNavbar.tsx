@@ -1,15 +1,16 @@
 import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../services/supabase';
 
 const DashboardNavbar = () => {
   const navigate = useNavigate();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     localStorage.removeItem('token');
     navigate('/login');
   };
 
   return (
-    // This updated className creates the transparent "glass" effect
     <nav className="sticky top-0 z-50 bg-black/20 backdrop-blur-lg border-b border-white/10">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
