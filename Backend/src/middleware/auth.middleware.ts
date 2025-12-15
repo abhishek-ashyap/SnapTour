@@ -1,39 +1,41 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { Request, Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
 
-interface DecodedToken {
-  user: {
-    id: string;
-    role: 'creator' | 'viewer';
-  };
-  iat: number;
-  exp: number;
-}
-
-export const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  // 1. Get token from header
-  const authHeader = req.header('Authorization');
-
-  // 2. Check if token exists
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ msg: 'No token, authorization denied' });
-  }
-
+export const authMiddleware = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const token = authHeader.split(' ')[1];
-    const jwtSecret = process.env.JWT_SECRET;
+    const authHeader = req.header("Authorization");
 
-    if (!jwtSecret) {
-      throw new Error('JWT_SECRET not defined in .env file');
+    if (!authHeader?.startsWith("Bearer ")) {
+      return res.status(401).json({ msg: "Authorization token missing" });
     }
 
-    // 3. Verify token
-    const decoded = jwt.verify(token, jwtSecret) as DecodedToken;
+    const token = authHeader.split(" ")[1];
+    const secret = process.env.SUPABASE_JWT_SECRET;
 
-    // 4. Add user from payload to request object
-    req.user = decoded.user;
+    if (!secret) {
+      console.error("❌ SUPABASE_JWT_SECRET not configured");
+      return res.status(500).json({ msg: "Server configuration error" });
+    }
+
+    const decoded = jwt.verify(token, secret) as any;
+
+    if (!decoded?.sub) {
+      return res.status(401).json({ msg: "Invalid token payload" });
+    }
+
+    req.user = {
+      id: decoded.sub,
+      email: decoded.email,
+      role: "creator", // default; real role resolved from DB when needed
+    };
+
     next();
-  } catch (err) {
-    res.status(401).json({ msg: 'Token is not valid' });
+  } catch (err: any) {
+    console.error("authMiddleware error:", err.message);
+    return res.status(401).json({ msg: "Invalid or expired token" });
   }
 };

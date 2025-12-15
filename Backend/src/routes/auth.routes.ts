@@ -1,14 +1,10 @@
-import { Router } from 'express';
-import { register, login, forgotPassword, resetPassword } from '../controllers/auth.controller'; // Add new imports
-import { validateRegistration, validateLogin } from '../middleware/validator.middleware';
+import { Router } from "express";
+import { syncProfile } from "../controllers/auth.controller";
+import { authMiddleware } from "../middleware/auth.middleware";
 
 const router = Router();
 
-router.post('/register', validateRegistration, register);
-router.post('/login', validateLogin, login);
-
-// Add new routes
-router.post('/forgot-password', forgotPassword);
-router.post('/reset-password/:token', resetPassword);
+// After Supabase login, frontend calls this
+router.post("/sync-profile", authMiddleware, syncProfile);
 
 export default router;
