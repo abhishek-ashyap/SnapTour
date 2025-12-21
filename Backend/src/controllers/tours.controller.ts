@@ -1,136 +1,196 @@
 import { Request, Response } from 'express';
 import db from '../db';
 
+/**
+ * CREATE TOUR
+ */
 export const createTour = async (req: Request, res: Response) => {
   const { title } = req.body;
   const ownerId = req.user?.id;
 
   if (!title) {
-    return res.status(400).json({ msg: 'Please provide a title for the tour' });
+    return res.status(400).json({ msg: 'Title required' });
   }
-
   if (!ownerId) {
-    return res.status(401).json({ msg: 'Not authorized' });
+    return res.status(401).json({ msg: 'Unauthorized' });
   }
 
   try {
-    const newTour = await db.query(
-      'INSERT INTO tours (title, owner_id) VALUES ($1, $2) RETURNING *',
+    const result = await db.query(
+      `
+      INSERT INTO tours (title, owner_id)
+      VALUES ($1, $2)
+      RETURNING *
+      `,
       [title, ownerId]
     );
 
-    res.status(201).json(newTour.rows[0]);
+    res.status(201).json(result.rows[0]);
   } catch (err: any) {
-    console.error(err.message);
+    console.error('createTour:', err.message);
     res.status(500).send('Server Error');
   }
 };
 
+/**
+ * GET ALL TOURS FOR LOGGED-IN USER
+ */
 export const getUserTours = async (req: Request, res: Response) => {
   const ownerId = req.user?.id;
 
   if (!ownerId) {
-    return res.status(401).json({ msg: 'Not authorized' });
+    return res.status(401).json({ msg: 'Unauthorized' });
   }
 
   try {
-    const tours = await db.query(
-      'SELECT * FROM tours WHERE owner_id = $1 ORDER BY created_at DESC',
+    const result = await db.query(
+      `
+      SELECT *
+      FROM tours
+      WHERE owner_id = $1
+      ORDER BY created_at DESC
+      `,
       [ownerId]
     );
 
-    res.status(200).json(tours.rows);
+    res.json(result.rows);
   } catch (err: any) {
-    console.error(err.message);
+    console.error('getUserTours:', err.message);
     res.status(500).send('Server Error');
   }
 };
 
-// --- THIS FUNCTION IS UPDATED ---
+/**
+ * GET SINGLE TOUR + STEPS
+ */
 export const getTourById = async (req: Request, res: Response) => {
-  const { id: tourId } = req.params;
-  const userId = req.user?.id;
+  const { id } = req.params;
+  const ownerId = req.user?.id;
 
   try {
-    // 1. Fetch the tour and verify ownership
     const tourResult = await db.query(
-      'SELECT * FROM tours WHERE id = $1 AND owner_id = $2',
-      [tourId, userId]
+      `
+      SELECT *
+      FROM tours
+      WHERE id = $1 AND owner_id = $2
+      `,
+      [id, ownerId]
     );
 
     if (tourResult.rows.length === 0) {
-      return res.status(404).json({ msg: 'Tour not found or you do not have permission to view it' });
+      return res.status(404).json({ msg: 'Tour not found' });
     }
 
-    const tour = tourResult.rows[0];
-
-    // 2. Fetch all steps for that tour, ordered by their index
     const stepsResult = await db.query(
-      'SELECT * FROM steps WHERE tour_id = $1 ORDER BY order_index ASC',
-      [tourId]
+      `
+      SELECT id, caption, image_url, step_order
+      FROM steps
+      WHERE tour_id = $1
+      ORDER BY step_order ASC
+      `,
+      [id]
     );
 
-    // 3. Combine the tour and its steps into a single response object
-    const response = {
-      ...tour,
-      steps: stepsResult.rows
-    };
-
-    res.status(200).json(response);
+    res.json({
+      ...tourResult.rows[0],
+      steps: stepsResult.rows,
+    });
   } catch (err: any) {
-    console.error(err.message);
+    console.error('getTourById:', err.message);
     res.status(500).send('Server Error');
   }
 };
 
+/**
+ * UPDATE TOUR (TITLE ONLY)
+ */
 export const updateTour = async (req: Request, res: Response) => {
-  const { id: tourId } = req.params;
-  const userId = req.user?.id;
-  const { title, is_public } = req.body;
+  const { id } = req.params;
+  const { title } = req.body;
+  const ownerId = req.user?.id;
+
+  if (!ownerId) {
+    return res.status(401).json({ msg: 'Unauthorized' });
+  }
 
   try {
-    const tourResult = await db.query(
-      'SELECT * FROM tours WHERE id = $1 AND owner_id = $2',
-      [tourId, userId]
+    const result = await db.query(
+      `
+      UPDATE tours
+      SET title = COALESCE($1, title)
+      WHERE id = $2 AND owner_id = $3
+      RETURNING *
+      `,
+      [title, id, ownerId]
     );
 
-    if (tourResult.rows.length === 0) {
-      return res.status(404).json({ msg: 'Tour not found or you do not have permission to edit it' });
+    if (result.rowCount === 0) {
+      return res.status(404).json({ msg: 'Tour not found or unauthorized' });
     }
 
-    const currentTour = tourResult.rows[0];
-    const newTitle = title !== undefined ? title : currentTour.title;
-    const newIsPublic = is_public !== undefined ? is_public : currentTour.is_public;
-
-    const updatedTour = await db.query(
-      'UPDATE tours SET title = $1, is_public = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
-      [newTitle, newIsPublic, tourId]
-    );
-
-    res.status(200).json(updatedTour.rows[0]);
+    res.json(result.rows[0]);
   } catch (err: any) {
-    console.error(err.message);
+    console.error('updateTour:', err.message);
     res.status(500).send('Server Error');
   }
 };
 
+/**
+ * DELETE SINGLE TOUR
+ */
 export const deleteTour = async (req: Request, res: Response) => {
-  const { id: tourId } = req.params;
-  const userId = req.user?.id;
+  const { id } = req.params;
+  const ownerId = req.user?.id;
+
+  if (!ownerId) {
+    return res.status(401).json({ msg: 'Unauthorized' });
+  }
 
   try {
-    const deleteResult = await db.query(
-      'DELETE FROM tours WHERE id = $1 AND owner_id = $2',
-      [tourId, userId]
+    const result = await db.query(
+      `
+      DELETE FROM tours
+      WHERE id = $1 AND owner_id = $2
+      `,
+      [id, ownerId]
     );
 
-    if (deleteResult.rowCount === 0) {
-      return res.status(404).json({ msg: 'Tour not found or you do not have permission to delete it' });
+    if (result.rowCount === 0) {
+      return res.status(404).json({ msg: 'Tour not found or unauthorized' });
     }
 
-    res.status(200).json({ msg: 'Tour successfully deleted' });
+    res.json({ msg: 'Tour deleted' });
   } catch (err: any) {
-    console.error(err.message);
+    console.error('deleteTour:', err.message);
+    res.status(500).send('Server Error');
+  }
+};
+
+/**
+ * DELETE ALL TOURS FOR LOGGED-IN USER
+ */
+export const deleteAllTours = async (req: Request, res: Response) => {
+  const ownerId = req.user?.id;
+
+  if (!ownerId) {
+    return res.status(401).json({ msg: 'Unauthorized' });
+  }
+
+  try {
+    const result = await db.query(
+      `
+      DELETE FROM tours
+      WHERE owner_id = $1
+      `,
+      [ownerId]
+    );
+
+    res.json({
+      msg: 'All tours deleted',
+      deletedCount: result.rowCount,
+    });
+  } catch (err: any) {
+    console.error('deleteAllTours:', err.message);
     res.status(500).send('Server Error');
   }
 };

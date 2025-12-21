@@ -1,82 +1,133 @@
 import { Request, Response } from 'express';
 import db from '../db';
 
+/**
+ * ADD STEP
+ */
 export const addStepToTour = async (req: Request, res: Response) => {
   const { tourId } = req.params;
   const userId = req.user?.id;
-  const { caption, image_url } = req.body;
+  const { caption, image_url, step_order } = req.body;
+
   try {
-    const tourResult = await db.query('SELECT id FROM tours WHERE id = $1 AND owner_id = $2', [tourId, userId]);
-    if (tourResult.rows.length === 0) {
-      return res.status(404).json({ msg: 'Tour not found or you do not have permission to edit it' });
+    const tourCheck = await db.query(
+      'SELECT id FROM tours WHERE id = $1 AND owner_id = $2',
+      [tourId, userId]
+    );
+
+    if (tourCheck.rows.length === 0) {
+      return res.status(404).json({ msg: 'Tour not found or unauthorized' });
     }
-    const orderResult = await db.query('SELECT MAX(order_index) as max_order FROM steps WHERE tour_id = $1', [tourId]);
-    const newOrderIndex = (orderResult.rows[0].max_order === null) ? 0 : orderResult.rows[0].max_order + 1;
-    const newStep = await db.query('INSERT INTO steps (tour_id, order_index, caption, image_url) VALUES ($1, $2, $3, $4) RETURNING *', [tourId, newOrderIndex, caption, image_url]);
-    res.status(201).json(newStep.rows[0]);
+
+    const result = await db.query(
+      `
+      INSERT INTO steps (tour_id, caption, image_url, step_order)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+      `,
+      [
+        tourId,
+        caption ?? '',          // ✅ prevents NOT NULL crash
+        image_url ?? null,
+        step_order ?? 0,
+      ]
+    );
+
+    res.status(201).json(result.rows[0]);
   } catch (err: any) {
-    console.error(err.message);
+    console.error('addStepToTour:', err.message);
     res.status(500).send('Server Error');
   }
 };
 
+/**
+ * UPDATE STEP
+ */
 export const updateStep = async (req: Request, res: Response) => {
   const { tourId, stepId } = req.params;
   const userId = req.user?.id;
-  const { caption, image_url, order_index } = req.body;
+  const { caption, image_url, step_order } = req.body;
+
   try {
-    const stepResult = await db.query(
-      `SELECT s.* FROM steps s 
-       JOIN tours t ON s.tour_id = t.id 
-       WHERE s.id = $1 AND s.tour_id = $2 AND t.owner_id = $3`,
-      [stepId, tourId, userId]
+    const result = await db.query(
+      `
+      UPDATE steps s
+      SET caption = COALESCE($1, caption),
+          image_url = COALESCE($2, image_url),
+          step_order = COALESCE($3, step_order)
+      FROM tours t
+      WHERE s.id = $4
+        AND s.tour_id = t.id
+        AND t.id = $5
+        AND t.owner_id = $6
+      RETURNING s.*
+      `,
+      [caption, image_url, step_order, stepId, tourId, userId]
     );
-    if (stepResult.rows.length === 0) {
-      return res.status(404).json({ msg: 'Step not found or you do not have permission to edit it' });
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ msg: 'Step not found or unauthorized' });
     }
-    const currentStep = stepResult.rows[0];
-    const newCaption = caption !== undefined ? caption : currentStep.caption;
-    const newImageUrl = image_url !== undefined ? image_url : currentStep.image_url;
-    const newOrderIndex = order_index !== undefined ? order_index : currentStep.order_index;
-    const updatedStep = await db.query('UPDATE steps SET caption = $1, image_url = $2, order_index = $3 WHERE id = $4 RETURNING *', [newCaption, newImageUrl, newOrderIndex, stepId]);
-    res.status(200).json(updatedStep.rows[0]);
+
+    res.status(200).json(result.rows[0]);
   } catch (err: any) {
-    console.error(err.message);
+    console.error('updateStep:', err.message);
     res.status(500).send('Server Error');
   }
 };
 
+/**
+ * DELETE STEP
+ */
 export const deleteStep = async (req: Request, res: Response) => {
   const { tourId, stepId } = req.params;
   const userId = req.user?.id;
+
   try {
-    const deleteResult = await db.query(
-      `DELETE FROM steps s USING tours t 
-       WHERE s.id = $1 AND s.tour_id = t.id AND s.tour_id = $2 AND t.owner_id = $3`,
+    const result = await db.query(
+      `
+      DELETE FROM steps s
+      USING tours t
+      WHERE s.id = $1
+        AND s.tour_id = t.id
+        AND t.id = $2
+        AND t.owner_id = $3
+      `,
       [stepId, tourId, userId]
     );
-    if (deleteResult.rowCount === 0) {
-      return res.status(404).json({ msg: 'Step not found or you do not have permission to delete it' });
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ msg: 'Step not found or unauthorized' });
     }
-    res.status(200).json({ msg: 'Step successfully deleted' });
+
+    res.status(200).json({ msg: 'Step deleted' });
   } catch (err: any) {
-    console.error(err.message);
+    console.error('deleteStep:', err.message);
     res.status(500).send('Server Error');
   }
 };
 
+/**
+ * DELETE ALL STEPS
+ */
 export const deleteAllStepsForTour = async (req: Request, res: Response) => {
   const { tourId } = req.params;
   const userId = req.user?.id;
+
   try {
-    const tourResult = await db.query('SELECT id FROM tours WHERE id = $1 AND owner_id = $2', [tourId, userId]);
-    if (tourResult.rows.length === 0) {
-      return res.status(404).json({ msg: 'Tour not found or you do not have permission to edit it' });
+    const tourCheck = await db.query(
+      'SELECT id FROM tours WHERE id = $1 AND owner_id = $2',
+      [tourId, userId]
+    );
+
+    if (tourCheck.rows.length === 0) {
+      return res.status(404).json({ msg: 'Tour not found or unauthorized' });
     }
+
     await db.query('DELETE FROM steps WHERE tour_id = $1', [tourId]);
-    res.status(200).json({ msg: 'Steps cleared successfully' });
+    res.status(200).json({ msg: 'All steps deleted' });
   } catch (err: any) {
-    console.error(err.message);
+    console.error('deleteAllStepsForTour:', err.message);
     res.status(500).send('Server Error');
   }
 };

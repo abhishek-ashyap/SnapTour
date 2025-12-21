@@ -6,18 +6,22 @@ import {
   getTourById,
   updateTour,
   deleteTour,
+  deleteAllTours,
 } from '../controllers/tours.controller';
 
 const router = Router();
 
-// Apply the auth middleware to all routes in this file
 router.use(authMiddleware);
 
-// Route definitions
+// /api/tours
 router.route('/')
   .post(createTour)
   .get(getUserTours);
 
+// DELETE ALL tours for logged-in user
+router.delete('/all', deleteAllTours);
+
+// /api/tours/:id
 router.route('/:id')
   .get(getTourById)
   .put(updateTour)

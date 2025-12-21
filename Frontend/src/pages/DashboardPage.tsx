@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import ShareModal from '../components/ShareModal'; // Import the new modal
+import ShareModal from '../components/ShareModal';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface Tour {
   id: string;
@@ -13,29 +14,59 @@ interface Tour {
 
 const DashboardPage = () => {
   const [tours, setTours] = useState<Tour[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [shareLink, setShareLink] = useState(''); // State to control the modal
+  const [shareLink, setShareLink] = useState('');
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   useEffect(() => {
-    const fetchTours = async () => {
-      try {
-        const response = await api.get('/tours');
-        setTours(response.data);
-      } catch (err) {
-        setError('Failed to fetch tours.');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchTours();
   }, []);
 
+  const fetchTours = async () => {
+    try {
+      const res = await api.get('/tours');
+      setTours(res.data);
+    } catch {
+      setError('Failed to fetch tours.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds(
+      selectedIds.size === tours.length
+        ? new Set()
+        : new Set(tours.map(t => t.id))
+    );
+  };
+
+  const confirmDeleteSelected = async () => {
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(id => api.delete(`/tours/${id}`))
+      );
+      setSelectedIds(new Set());
+      fetchTours();
+    } finally {
+      setIsDeleteModalOpen(false);
+    }
+  };
+
   const handleShare = (e: React.MouseEvent, tourId: string) => {
-    e.stopPropagation(); // Prevents navigating to the editor
     e.preventDefault();
-    const link = `${window.location.origin}/view/tour/${tourId}`;
-    setShareLink(link);
+    e.stopPropagation();
+    setShareLink(`${window.location.origin}/view/tour/${tourId}`);
   };
 
   if (loading) return <div className="p-10 text-center text-slate-400">Loading your demos...</div>;
@@ -44,57 +75,76 @@ const DashboardPage = () => {
   return (
     <>
       <ShareModal isOpen={!!shareLink} onClose={() => setShareLink('')} shareLink={shareLink} />
+
+      <ConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={confirmDeleteSelected}
+        title="Delete Selected Demos"
+        message={`Are you sure you want to permanently delete ${selectedIds.size} demo(s)?`}
+      />
+
       <div className="aurora-container min-h-[calc(100vh-65px)]">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }} 
-          animate={{ opacity: 1, y: 0 }}
-          className="container mx-auto px-4 sm:px-6 lg:px-8 py-8"
-        >
-          <div className="flex justify-between items-center mb-8">
+        <div className="container mx-auto px-4 py-8">
+
+          <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold text-white">Your Demos</h1>
-            <Link 
-              to="/editor/new"
-              className="rounded-md bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:shadow-blue-500/30 transition-transform transform hover:scale-105"
-            >
-              + Create New Demo
-            </Link>
-          </div>
-          
-          {tours.length === 0 ? (
-            <div className="text-center py-20 rounded-2xl border border-white/10 bg-black/10 backdrop-blur-xl">
-              <h3 className="text-xl font-semibold text-white">No Demos Yet</h3>
-              <p className="text-slate-400 mt-2">Click the button above to create your first interactive demo!</p>
+
+            <div className="flex gap-3">
+              {selectedIds.size > 0 && (
+                <button
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-4 py-2 rounded-md text-sm shadow-lg"
+                >
+                  Delete Selected ({selectedIds.size})
+                </button>
+              )}
+
+              <Link
+                to="/editor/new"
+                className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-4 py-2 rounded-md text-white text-sm shadow-lg transition-transform hover:scale-105"
+              >
+                + Create New Demo
+              </Link>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {tours.map((tour, index) => (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} key={tour.id}>
-                  <Link to={`/editor/${tour.id}`} className="block h-full">
-                    <div className="h-full p-5 rounded-2xl border border-white/10 bg-black/10 backdrop-blur-xl shadow-lg hover:border-white/20 hover:-translate-y-1 transition-all flex flex-col justify-between">
-                      <div>
-                        <h3 className="font-bold text-white truncate">{tour.title}</h3>
-                        <p className={`text-xs mt-2 font-medium ${tour.is_public ? 'text-green-400' : 'text-slate-400'}`}>
-                          {tour.is_public ? 'Public' : 'Private'}
-                        </p>
-                      </div>
-                      <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between">
-                        <div className="text-sm text-slate-400 space-y-1">
-                          <p>Views: {Math.floor(Math.random() * 1000)}</p>
-                          <p>Completions: {Math.floor(Math.random() * 80)}%</p>
-                        </div>
-                        {tour.is_public && (
-                          <button onClick={(e) => handleShare(e, tour.id)} className="rounded-md bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-xs font-medium text-white z-10">
-                            Share
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
-                </motion.div>
-              ))}
+          </div>
+
+          {tours.length > 0 && (
+            <div className="mb-4 flex items-center gap-2 text-slate-300">
+              <input type="checkbox" checked={selectedIds.size === tours.length} onChange={toggleSelectAll} />
+              Select All
             </div>
           )}
-        </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {tours.map((tour, index) => (
+              <motion.div key={tour.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}>
+                <Link to={`/editor/${tour.id}`}>
+                  <div className="relative p-5 rounded-xl border border-white/10 bg-black/10 hover:border-white/20 transition-all">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(tour.id)}
+                      onClick={e => e.stopPropagation()}
+                      onChange={() => toggleSelect(tour.id)}
+                      className="absolute top-3 left-3"
+                    />
+                    <h3 className="font-bold text-white truncate pl-6">{tour.title}</h3>
+                    <div className="mt-4 flex justify-between items-center">
+                      <span className={`text-xs ${tour.is_public ? 'text-green-400' : 'text-slate-400'}`}>
+                        {tour.is_public ? 'Public' : 'Private'}
+                      </span>
+                      {tour.is_public && (
+                        <button onClick={e => handleShare(e, tour.id)} className="bg-slate-700 px-3 py-1 text-xs rounded-md text-white">
+                          Share
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </div>
       </div>
     </>
   );
