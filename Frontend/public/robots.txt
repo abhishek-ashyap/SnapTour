@@ -1,3 +1,12 @@
 User-agent: *
 Allow: /
+
+# Sitemaps
 Sitemap: https://snap-tour.vercel.app/sitemap.xml
+
+# Crawl-delay: 10
+# Uncomment above and set delay in seconds if needed
+
+# Block specific paths (example)
+# Disallow: /private/
+# Disallow: /admin/
