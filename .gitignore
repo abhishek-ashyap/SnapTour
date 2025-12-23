@@ -101,3 +101,21 @@ public
 
 # Vercel
 .vercel
+
+# Package lock files (use package.json only)
+package-lock.json
+**/package-lock.json
+
+# Environment files (security - contains API keys and secrets)
+.env
+**/.env
+
+# macOS system files
+.DS_Store
+**/.DS_Store
+
+# Development and build artifacts
+.vite/
+dist/
+build/
+*.tsbuildinfo
